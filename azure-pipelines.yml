@@ -10,25 +10,37 @@ pool:
   vmImage: 'windows-latest'
 
 variables:
-  solution: '**/*.sln'
-  buildPlatform: 'Any CPU'
   buildConfiguration: 'Release'
+  proyecto: 'WebApiAutores/WebApiAutores.csproj'
 
 steps:
-- task: NuGetToolInstaller@1
-
-- task: NuGetCommand@2
+- task: UseDotNet@2
+  displayName: 'Install .NET Core SDK 7.x'
   inputs:
-    restoreSolution: '$(solution)'
+    version: 7.x
 
-- task: VSBuild@1
-  inputs:
-    solution: '$(solution)'
-    msbuildArgs: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:PackageLocation="$(build.artifactStagingDirectory)"'
-    platform: '$(buildPlatform)'
-    configuration: '$(buildConfiguration)'
+- script: dotnet build --configuration $(buildConfiguration)
+  displayName: 'dotnet build $(buildConfiguration)'
 
-- task: VSTest@2
+- task: CmdLine@2
+  displayName: 'Installing EF Core CLI'
   inputs:
-    platform: '$(buildPlatform)'
-    configuration: '$(buildConfiguration)'
+    script: 'dotnet tool install --global dotnet-ef'
+
+- task: CmdLine@2
+  displayName: 'Generating DB script'
+  inputs:
+    script: 'dotnet ef migrations script -i -o $(Build.ArtifactStagingDirectory)\migrage.sql --project $(proyecto)'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Publishing app...'
+  inputs:
+    command: 'publish'
+    publishWebProjects: false
+    projects: $(proyecto)
+    arguments: '--configuration $(BuildConfiguration) --output $(Build.ArtifactStagingDirectory) --runtime win-x64'
+    zipAfterPublish: false
+    modifyOutputPath: false
+
+- task: PublishBuildArtifacts@1
+  displayName: 'Publicando los artefactos'
